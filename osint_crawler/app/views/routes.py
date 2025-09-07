@@ -10,3 +10,9 @@ def crawl_domain():
         return jsonify({"error": "Missing 'url' parameter"}), 400
     result = CrawlController.crawl_domain(url)
     return jsonify(result)
+
+@routes.route("/osint", methods=["GET"])
+def run_osint():
+    controller = CrawlController()
+    result = controller.run_osint()
+    return jsonify(result)
