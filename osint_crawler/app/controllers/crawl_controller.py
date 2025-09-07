@@ -52,3 +52,7 @@ class CrawlController:
             "seed_type": self.seed_type,
             "results": results_tree
         }
+
+    def crawl_domain(self, url: str):
+        """Crawl a single domain."""
+        return CrawlerService.crawl_domain(url)
