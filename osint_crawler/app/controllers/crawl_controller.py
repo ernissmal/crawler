@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 from duckduckgo_search import DDGS
 
 from app.models.domain import DomainIntel
@@ -9,7 +10,6 @@ from app.services.crawler_service import CrawlerService
 
 class CrawlController:
     def __init__(self):
-        load_dotenv()
         self.seed = os.getenv("TARGET_SEED", "John Doe")
         self.seed_type = os.getenv("TARGET_TYPE", "name")
         self.model = GoogleGeekingModel(self.seed, seed_type=self.seed_type)
@@ -53,6 +53,7 @@ class CrawlController:
             "results": results_tree
         }
 
-    def crawl_domain(self, url: str):
+    @staticmethod
+    def crawl_domain(url: str):
         """Crawl a single domain."""
         return CrawlerService.crawl_domain(url)
