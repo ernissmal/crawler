@@ -79,6 +79,217 @@ def parse_price(price_str: str):
     currency_map = {"€": "EUR", "£": "GBP", "$": "USD"}
     return currency_map.get(currency, "EUR"), amount
 
+# Extract dimensions from product page
+def extract_dimensions(soup, title):
+    """Extract length, width, height from product page"""
+    dimensions = {'length': None, 'width': None, 'height': None, 'notes': ''}
+    
+    # Common dimension patterns
+    dimension_patterns = [
+        r'(\d+)\s*[x×]\s*(\d+)\s*[x×]\s*(\d+)\s*cm',
+        r'(\d+)\s*cm\s*[x×]\s*(\d+)\s*cm\s*[x×]\s*(\d+)\s*cm',
+        r'L\s*(\d+)\s*[x×]\s*W\s*(\d+)\s*[x×]\s*H\s*(\d+)',
+        r'(\d+)\s*[x×]\s*(\d+)\s*[x×]\s*(\d+)',
+    ]
+    
+    # Search in various places
+    search_areas = [
+        title,
+        soup.get_text(),
+        str(soup.select('.dimensions, .specs, .product-details, .description'))
+    ]
+    
+    for area in search_areas:
+        if not area:
+            continue
+        for pattern in dimension_patterns:
+            match = re.search(pattern, area, re.IGNORECASE)
+            if match:
+                try:
+                    l, w, h = match.groups()
+                    dimensions['length'] = int(l)
+                    dimensions['width'] = int(w) 
+                    dimensions['height'] = int(h)
+                    dimensions['notes'] = f"Found: {match.group(0)}"
+                    return dimensions
+                except ValueError:
+                    continue
+    
+    return dimensions
+
+# Extract delivery information
+def extract_delivery_info(soup):
+    """Extract delivery cost, time, and terms"""
+    delivery_info = {'cost': None, 'terms': '', 'time_days': None, 'method': ''}
+    
+    text = soup.get_text().lower()
+    
+    # Delivery cost patterns
+    delivery_cost_patterns = [
+        r'delivery[:\s]*[£€$]?([\d.,]+)',
+        r'shipping[:\s]*[£€$]?([\d.,]+)',
+        r'postage[:\s]*[£€$]?([\d.,]+)'
+    ]
+    
+    for pattern in delivery_cost_patterns:
+        match = re.search(pattern, text)
+        if match:
+            try:
+                delivery_info['cost'] = float(match.group(1).replace(',', ''))
+                break
+            except ValueError:
+                continue
+    
+    # Free delivery
+    if any(phrase in text for phrase in ['free delivery', 'free shipping', 'free postage']):
+        delivery_info['cost'] = 0
+        delivery_info['terms'] = 'Free delivery'
+    
+    # Delivery time patterns
+    time_patterns = [
+        r'(\d+)[\s-]*(?:to[\s-]*(\d+))?[\s-]*(?:working[\s]*)?days?',
+        r'(\d+)[\s-]*(?:to[\s-]*(\d+))?[\s-]*weeks?'
+    ]
+    
+    for pattern in time_patterns:
+        match = re.search(pattern, text)
+        if match:
+            try:
+                days = int(match.group(1))
+                if 'week' in match.group(0):
+                    days *= 7
+                delivery_info['time_days'] = days
+                break
+            except (ValueError, AttributeError):
+                continue
+    
+    return delivery_info
+
+# Extract service information (assembly, warranty, etc.)
+def extract_service_info(soup):
+    """Extract assembly, warranty, customization info"""
+    service_info = {
+        'assembly_required': '',
+        'return_days': None,
+        'warranty_months': None,
+        'customization': '',
+        'customization_days': None
+    }
+    
+    text = soup.get_text().lower()
+    
+    # Assembly
+    if any(phrase in text for phrase in ['assembly required', 'requires assembly', 'self assembly']):
+        service_info['assembly_required'] = 'Yes'
+    elif any(phrase in text for phrase in ['pre-assembled', 'fully assembled', 'no assembly']):
+        service_info['assembly_required'] = 'No'
+    
+    # Returns policy
+    return_patterns = [
+        r'(\d+)[\s-]*days?[\s]*return',
+        r'return[\s]*within[\s]*(\d+)[\s]*days?'
+    ]
+    
+    for pattern in return_patterns:
+        match = re.search(pattern, text)
+        if match:
+            try:
+                service_info['return_days'] = int(match.group(1))
+                break
+            except ValueError:
+                continue
+    
+    # Warranty
+    warranty_patterns = [
+        r'(\d+)[\s-]*year[\s]*warranty',
+        r'(\d+)[\s-]*month[\s]*warranty',
+        r'warranty[\s]*(\d+)[\s]*(?:year|month)'
+    ]
+    
+    for pattern in warranty_patterns:
+        match = re.search(pattern, text)
+        if match:
+            try:
+                months = int(match.group(1))
+                if 'year' in match.group(0):
+                    months *= 12
+                service_info['warranty_months'] = months
+                break
+            except ValueError:
+                continue
+    
+    # Customization
+    if any(phrase in text for phrase in ['bespoke', 'custom', 'made to order', 'personalized']):
+        service_info['customization'] = 'Available'
+        
+        # Custom time
+        custom_time_patterns = [
+            r'(\d+)[\s-]*(?:to[\s-]*(\d+))?[\s-]*weeks?[\s]*(?:for[\s]*)?(?:custom|bespoke)',
+            r'(?:custom|bespoke)[\s]*(\d+)[\s-]*(?:to[\s-]*(\d+))?[\s-]*weeks?'
+        ]
+        
+        for pattern in custom_time_patterns:
+            match = re.search(pattern, text)
+            if match:
+                try:
+                    weeks = int(match.group(1))
+                    service_info['customization_days'] = weeks * 7
+                    break
+                except ValueError:
+                    continue
+    
+    return service_info
+
+# Extract stock status
+def extract_stock_status(soup):
+    """Extract availability/stock status"""
+    text = soup.get_text().lower()
+    
+    if any(phrase in text for phrase in ['in stock', 'available now', 'ready to ship']):
+        return 'In Stock'
+    elif any(phrase in text for phrase in ['out of stock', 'sold out', 'unavailable']):
+        return 'Out of Stock'
+    elif any(phrase in text for phrase in ['pre-order', 'coming soon', 'expected']):
+        return 'Pre-order'
+    elif any(phrase in text for phrase in ['made to order', 'bespoke']):
+        return 'Made to Order'
+    else:
+        return 'Unknown'
+
+# Extract payment information
+def extract_payment_info(soup):
+    """Extract payment terms and options"""
+    text = soup.get_text().lower()
+    
+    payment_methods = []
+    if 'paypal' in text:
+        payment_methods.append('PayPal')
+    if any(card in text for card in ['visa', 'mastercard', 'credit card']):
+        payment_methods.append('Credit Card')
+    if 'klarna' in text:
+        payment_methods.append('Klarna')
+    if 'finance' in text or 'installment' in text:
+        payment_methods.append('Finance Available')
+    
+    return ', '.join(payment_methods) if payment_methods else ''
+
+# Extract contact information
+def extract_contact_info(soup):
+    """Extract contact email or phone"""
+    text = soup.get_text()
+    
+    # Email pattern
+    email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)
+    if email_match:
+        return email_match.group(0)
+    
+    # Phone pattern
+    phone_match = re.search(r'(?:\+44|0)[\s-]?[\d\s-]{10,}', text)
+    if phone_match:
+        return phone_match.group(0).strip()
+    
+    return ''
+
 # Scrape single product page
 def scrape_table_data(url: str, base_currency="EUR", session=None) -> dict:
     if session is None:
@@ -113,6 +324,15 @@ def scrape_table_data(url: str, base_currency="EUR", session=None) -> dict:
                     price_cur, price_val = parsed_cur, parsed_val
                     break
         
+        # Extract dimensions
+        dimensions = extract_dimensions(soup, title)
+        
+        # Extract delivery information
+        delivery_info = extract_delivery_info(soup)
+        
+        # Extract assembly and warranty info
+        service_info = extract_service_info(soup)
+        
         # Convert to base currency
         try:
             price_eur = price_val if price_cur == base_currency else c.convert(price_cur, base_currency, price_val)
@@ -132,30 +352,30 @@ def scrape_table_data(url: str, base_currency="EUR", session=None) -> dict:
             "Galda tips": "Dining Table",
             "Materiāls(-i)": "Oak",
             "Apdare / Krāsa": "Natural",
-            "Garums_cm": None,
-            "Platums_cm": None,
-            "Augstums_cm": None,
-            "Izmēru piezīmes": "",
+            "Garums_cm": dimensions.get('length'),
+            "Platums_cm": dimensions.get('width'),
+            "Augstums_cm": dimensions.get('height'),
+            "Izmēru piezīmes": dimensions.get('notes', ''),
             "Cena_valūta": price_cur,
             "Cena_summa": price_val,
             "Cena_EUR": round(price_eur, 2) if price_eur else 0,
             "Cena_vienība": "each",
             "Cena_piezīmes": "",
-            "Piegādes izmaksas": None,
-            "Piegādes noteikumi": "",
-            "Piegādes laiks_dienas": None,
-            "Piegādes veids": "",
-            "Montāža nepieciešama": "",
-            "Atgriešanas noteikumi_dienas": None,
-            "Garantija_mēneši": None,
-            "Pielāgošanas iespējas": "",
-            "Pielāgošanas laiks_dienas": None,
-            "Krājuma statuss": "Available",
+            "Piegādes izmaksas": delivery_info.get('cost'),
+            "Piegādes noteikumi": delivery_info.get('terms', ''),
+            "Piegādes laiks_dienas": delivery_info.get('time_days'),
+            "Piegādes veids": delivery_info.get('method', ''),
+            "Montāža nepieciešama": service_info.get('assembly_required', ''),
+            "Atgriešanas noteikumi_dienas": service_info.get('return_days'),
+            "Garantija_mēneši": service_info.get('warranty_months'),
+            "Pielāgošanas iespējas": service_info.get('customization', ''),
+            "Pielāgošanas laiks_dienas": service_info.get('customization_days'),
+            "Krājuma statuss": extract_stock_status(soup),
             "Minimālais pasūtījuma daudzums": 1,
-            "Apmaksas noteikumi": "",
-            "PVN iekļauts": "",
+            "Apmaksas noteikumi": extract_payment_info(soup),
+            "PVN iekļauts": "Yes" if any(keyword in soup.get_text().lower() for keyword in ['inc vat', 'including vat', 'incl. vat']) else "Unknown",
             "Kontakta persona": "",
-            "Kontakta e-pasts vai telefons": "",
+            "Kontakta e-pasts vai telefons": extract_contact_info(soup),
             "Ekrānuzņēmuma URL": "",
             "Avota piezīmes": f"Scraped from {domain}",
             "Datums pārbaudīts": pd.Timestamp.today().strftime("%Y-%m-%d"),
@@ -163,7 +383,7 @@ def scrape_table_data(url: str, base_currency="EUR", session=None) -> dict:
             "Darbību priekšlikumi": ""
         }
         
-        print(f"✓ Successfully scraped: {domain} - {title[:30]}...")
+        print(f"✓ Successfully scraped: {domain} - {title[:30]}... (Dims: {dimensions.get('length')}×{dimensions.get('width')}×{dimensions.get('height')})")
         return data
         
     except requests.exceptions.Timeout:
