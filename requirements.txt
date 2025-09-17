@@ -1,0 +1,6 @@
+fastapi
+pydantic
+pandas
+requests
+beautifulsoup4
+forex-python
