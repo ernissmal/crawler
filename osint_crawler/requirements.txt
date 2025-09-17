@@ -1,7 +1,0 @@
-# Add required packages here
-flask
-requests
-beautifulsoup4
-python-dotenv
-duckduckgo-search
-whois
