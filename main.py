@@ -15,6 +15,10 @@ from urllib3.util.retry import Retry
 
 app = FastAPI(title="International Solid Oak Table Scraper")
 
+@app.get("/")
+def health_check():
+    return {"status": "OK", "message": "Oak Table Scraper API is running"}
+
 c = CurrencyRates()
 
 # Configure requests session with retries and proper headers
@@ -25,7 +29,7 @@ def create_session():
     retry_strategy = Retry(
         total=3,
         status_forcelist=[429, 500, 502, 503, 504],
-        method_whitelist=["HEAD", "GET", "OPTIONS"]
+        allowed_methods=["HEAD", "GET", "OPTIONS"]
     )
     
     adapter = HTTPAdapter(max_retries=retry_strategy)
@@ -174,67 +178,75 @@ def scrape_table_data(url: str, base_currency="EUR", session=None) -> dict:
 
 @app.post("/crawl")
 def crawl_tables(request: CrawlRequest):
-    # Read URLs from unique_urls.txt
-    url_file = "unique_urls.txt"
-    if not os.path.exists(url_file):
-        raise HTTPException(status_code=400, detail=f"URL file {url_file} not found.")
-    
-    with open(url_file, "r", encoding="utf-8") as f:
-        urls = [line.strip() for line in f if line.strip()]
-    
-    print(f"Starting to crawl {len(urls)} URLs...")
-    
-    all_data = []
-    failed_urls = []
-    session = create_session()
-    
-    # Process URLs with concurrent processing for better speed
-    def process_url(url):
-        result = scrape_table_data(url, base_currency=request.base_currency, session=session)
-        return url, result
-    
-    # Use ThreadPoolExecutor for concurrent processing
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        future_to_url = {executor.submit(process_url, url): url for url in urls}
+    try:
+        # Read URLs from unique_urls.txt
+        url_file = "unique_urls.txt"
+        if not os.path.exists(url_file):
+            raise HTTPException(status_code=400, detail=f"URL file {url_file} not found.")
         
-        for future in concurrent.futures.as_completed(future_to_url):
-            url = future_to_url[future]
-            try:
-                url, data = future.result()
-                if data:
-                    all_data.append(data)
-                else:
+        with open(url_file, "r", encoding="utf-8") as f:
+            urls = [line.strip() for line in f if line.strip()]
+        
+        if not urls:
+            raise HTTPException(status_code=400, detail="No URLs found in unique_urls.txt")
+        
+        print(f"Starting to crawl {len(urls)} URLs...")
+        
+        all_data = []
+        failed_urls = []
+        session = create_session()
+        
+        # Process URLs with concurrent processing for better speed
+        def process_url(url):
+            result = scrape_table_data(url, base_currency=request.base_currency, session=session)
+            return url, result
+        
+        # Use ThreadPoolExecutor for concurrent processing
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            future_to_url = {executor.submit(process_url, url): url for url in urls}
+            
+            for future in concurrent.futures.as_completed(future_to_url):
+                url = future_to_url[future]
+                try:
+                    url, data = future.result()
+                    if data:
+                        all_data.append(data)
+                    else:
+                        failed_urls.append(url)
+                except Exception as exc:
+                    print(f'URL {url} generated an exception: {exc}')
                     failed_urls.append(url)
-            except Exception as exc:
-                print(f'URL {url} generated an exception: {exc}')
-                failed_urls.append(url)
+        
+        # Save failed URLs for review
+        if failed_urls:
+            with open("failed_urls.txt", "w", encoding="utf-8") as f:
+                for url in failed_urls:
+                    f.write(url + "\n")
+            print(f"Saved {len(failed_urls)} failed URLs to failed_urls.txt")
+        
+        if not all_data:
+            raise HTTPException(status_code=404, detail="No data scraped successfully.")
+        
+        print(f"Successfully scraped {len(all_data)} out of {len(urls)} URLs")
+        
+        df = pd.DataFrame(all_data)
+        
+        # Save CSV
+        csv_path = "scraped_tables.csv"
+        df.to_csv(csv_path, index=False, encoding="utf-8-sig")
+        
+        # Save Excel
+        df.to_excel(request.output_excel, index=False)
+        
+        return {
+            "message": f"Scraping completed!",
+            "total_urls": len(urls),
+            "successful": len(all_data),
+            "failed": len(failed_urls),
+            "csv_file": csv_path,
+            "excel_file": request.output_excel
+        }
     
-    # Save failed URLs for review
-    if failed_urls:
-        with open("failed_urls.txt", "w", encoding="utf-8") as f:
-            for url in failed_urls:
-                f.write(url + "\n")
-        print(f"Saved {len(failed_urls)} failed URLs to failed_urls.txt")
-    
-    if not all_data:
-        raise HTTPException(status_code=404, detail="No data scraped successfully.")
-    
-    print(f"Successfully scraped {len(all_data)} out of {len(urls)} URLs")
-    
-    df = pd.DataFrame(all_data)
-    
-    # Save CSV
-    csv_path = "scraped_tables.csv"
-    df.to_csv(csv_path, index=False, encoding="utf-8-sig")
-    
-    # Save Excel
-    df.to_excel(request.output_excel, index=False)
-    
-    return {
-        "message": f"Scraping completed!",
-        "total_urls": len(urls),
-        "successful": len(all_data),
-        "failed": len(failed_urls),
-        "csv_file": csv_path,
-        "excel_file": request.output_excel
-    }
+    except Exception as e:
+        print(f"Error in crawl_tables: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
