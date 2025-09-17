@@ -8,10 +8,41 @@ from bs4 import BeautifulSoup
 import os
 from forex_python.converter import CurrencyRates
 import re
+import concurrent.futures
+import time
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 app = FastAPI(title="International Solid Oak Table Scraper")
 
 c = CurrencyRates()
+
+# Configure requests session with retries and proper headers
+def create_session():
+    session = requests.Session()
+    
+    # Set up retry strategy
+    retry_strategy = Retry(
+        total=3,
+        status_forcelist=[429, 500, 502, 503, 504],
+        method_whitelist=["HEAD", "GET", "OPTIONS"]
+    )
+    
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    
+    # Set proper headers
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+    })
+    
+    return session
 
 # Input model
 class CrawlRequest(BaseModel):
