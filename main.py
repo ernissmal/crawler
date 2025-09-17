@@ -22,6 +22,13 @@ app = FastAPI(title="International Solid Oak Table Scraper")
 def health_check():
     return {"status": "OK", "message": "Oak Table Scraper API is running"}
 
+@app.post("/test-manual")
+def test_manual_extraction(url: str = "https://www.oakfurnitureland.co.uk/category/dining-tables/"):
+    """Test manual extraction with a single URL"""
+    session = create_session()
+    result = scrape_table_data(url, base_currency="EUR", session=session, manual_assistance=True)
+    return {"url": url, "extracted_data": result}
+
 c = CurrencyRates()
 
 # Configure requests session with retries and proper headers
@@ -55,6 +62,7 @@ def create_session():
 class CrawlRequest(BaseModel):
     output_excel: Optional[str] = "Competitor_Oak_Tables.xlsx"
     base_currency: Optional[str] = "EUR"
+    manual_assistance: Optional[bool] = False  # Enable manual browser assistance
 
 # Excel columns in Latvian
 COLUMNS = [
@@ -82,26 +90,70 @@ def parse_price(price_str: str):
     currency_map = {"€": "EUR", "£": "GBP", "$": "USD"}
     return currency_map.get(currency, "EUR"), amount
 
-# Extract dimensions from product page
-def extract_dimensions(soup, title):
-    """Extract length, width, height from product page"""
+# Extract dimensions from product page with manual assistance
+def extract_dimensions_with_assistance(soup, title, url, manual_mode=False):
+    """Extract length, width, height from product page with manual fallback"""
     dimensions = {'length': None, 'width': None, 'height': None, 'notes': ''}
     
-    # Common dimension patterns
+    # Enhanced dimension patterns - much more comprehensive
     dimension_patterns = [
+        # Standard formats
         r'(\d+)\s*[x×]\s*(\d+)\s*[x×]\s*(\d+)\s*cm',
         r'(\d+)\s*cm\s*[x×]\s*(\d+)\s*cm\s*[x×]\s*(\d+)\s*cm',
-        r'L\s*(\d+)\s*[x×]\s*W\s*(\d+)\s*[x×]\s*H\s*(\d+)',
         r'(\d+)\s*[x×]\s*(\d+)\s*[x×]\s*(\d+)',
+        
+        # With units
+        r'(\d+)\s*cm\s*[x×]\s*(\d+)\s*cm\s*[x×]\s*(\d+)\s*cm',
+        r'(\d+)\s*mm\s*[x×]\s*(\d+)\s*mm\s*[x×]\s*(\d+)\s*mm',
+        
+        # With labels
+        r'L[ength]*[\s:]*(\d+)[cm]*\s*[x×]\s*W[idth]*[\s:]*(\d+)[cm]*\s*[x×]\s*H[eight]*[\s:]*(\d+)[cm]*',
+        r'Length[\s:]*(\d+)[cm]*\s*[x×]\s*Width[\s:]*(\d+)[cm]*\s*[x×]\s*Height[\s:]*(\d+)[cm]*',
+        r'(\d+)[cm]*\s*[Ll]\s*[x×]\s*(\d+)[cm]*\s*[Ww]\s*[x×]\s*(\d+)[cm]*\s*[Hh]',
+        
+        # Dimensions with spacing variations
+        r'(\d+)\s*x\s*(\d+)\s*x\s*(\d+)\s*cm',
+        r'(\d+)cm\s*x\s*(\d+)cm\s*x\s*(\d+)cm',
+        r'(\d+)\s*×\s*(\d+)\s*×\s*(\d+)\s*cm',
+        
+        # Table specific
+        r'Table[\s\w]*:?\s*(\d+)\s*[x×]\s*(\d+)\s*[x×]\s*(\d+)',
+        r'Size[\s:]*(\d+)\s*[x×]\s*(\d+)\s*[x×]\s*(\d+)',
+        r'Dimensions[\s:]*(\d+)\s*[x×]\s*(\d+)\s*[x×]\s*(\d+)',
+        
+        # Bracket formats
+        r'\((\d+)\s*[x×]\s*(\d+)\s*[x×]\s*(\d+)\)',
+        r'\[(\d+)\s*[x×]\s*(\d+)\s*[x×]\s*(\d+)\]',
+        
+        # With measurements in inches (convert to cm)
+        r'(\d+)["\']\s*[x×]\s*(\d+)["\']\s*[x×]\s*(\d+)["\']',
+        r'(\d+)\s*inch[es]*\s*[x×]\s*(\d+)\s*inch[es]*\s*[x×]\s*(\d+)\s*inch[es]*',
     ]
     
-    # Search in various places
-    search_areas = [
-        title,
-        soup.get_text(),
-        str(soup.select('.dimensions, .specs, .product-details, .description'))
+    # Enhanced search areas - look in more specific places
+    search_selectors = [
+        '.dimensions', '.specs', '.specifications', '.product-details', '.description',
+        '.product-info', '.details', '.measurements', '.size', '.product-specifications',
+        '.tech-specs', '.product-dimensions', '.item-details', '.features',
+        '[class*="dimension"]', '[class*="spec"]', '[class*="detail"]', 
+        '[id*="dimension"]', '[id*="spec"]', '[id*="detail"]',
+        'table', '.table', '#specifications', '#details', '#dimensions'
     ]
     
+    search_areas = [title]
+    
+    # Add specific element content
+    for selector in search_selectors:
+        elements = soup.select(selector)
+        for element in elements:
+            if element:
+                search_areas.append(element.get_text())
+    
+    # Add full page text as last resort
+    search_areas.append(soup.get_text())
+    
+    # Try to find dimensions in all areas
+    found_match = None
     for area in search_areas:
         if not area:
             continue
@@ -110,15 +162,128 @@ def extract_dimensions(soup, title):
             if match:
                 try:
                     l, w, h = match.groups()
-                    dimensions['length'] = int(l)
-                    dimensions['width'] = int(w) 
-                    dimensions['height'] = int(h)
-                    dimensions['notes'] = f"Found: {match.group(0)}"
-                    return dimensions
-                except ValueError:
+                    # Convert inches to cm if needed
+                    if '"' in match.group(0) or 'inch' in match.group(0):
+                        l, w, h = int(float(l) * 2.54), int(float(w) * 2.54), int(float(h) * 2.54)
+                    else:
+                        l, w, h = int(l), int(w), int(h)
+                    
+                    # Validate reasonable furniture dimensions
+                    if 50 <= l <= 500 and 50 <= w <= 200 and 50 <= h <= 120:
+                        dimensions['length'] = l
+                        dimensions['width'] = w
+                        dimensions['height'] = h
+                        dimensions['notes'] = f"Auto-found: {match.group(0)}"
+                        print(f"✓ Found dimensions: {l}×{w}×{h}cm")
+                        return dimensions
+                    else:
+                        found_match = match
+                except (ValueError, AttributeError):
                     continue
     
+    # If no valid dimensions found, ask for manual assistance
+    if not dimensions['length'] and manual_mode:
+        print(f"⚠️  Could not auto-extract dimensions for {url}")
+        manual_dims = get_manual_dimensions(url, found_match)
+        if manual_dims:
+            dimensions.update(manual_dims)
+    elif not dimensions['length']:
+        dimensions['notes'] = "Auto-extraction failed, manual mode disabled"
+    
     return dimensions
+
+def get_manual_dimensions(url, found_match=None):
+    """Open browser and get manual input for dimensions"""
+    print(f"\n🌐 Opening browser for manual dimension extraction...")
+    print(f"URL: {url}")
+    
+    if found_match:
+        print(f"Found potential match: {found_match.group(0)} (but dimensions seem invalid)")
+    
+    # Open the URL in default browser
+    webbrowser.open(url)
+    
+    print("\n📏 MANUAL DIMENSION EXTRACTION")
+    print("Please find the product dimensions on the webpage and enter them below.")
+    print("Look for: Length × Width × Height (in cm)")
+    print("Example formats: '180×90×75cm', '180 x 90 x 75', 'L:180 W:90 H:75'")
+    print("\nIf you need to:")
+    print("- Complete a CAPTCHA")
+    print("- Navigate to a different page")
+    print("- Accept cookies")
+    print("- Deal with popups")
+    print("\nDo so now, then come back here to enter the dimensions.")
+    
+    while True:
+        user_input = input("\nEnter dimensions (L×W×H in cm) or 'skip' to skip this product: ").strip()
+        
+        if user_input.lower() == 'skip':
+            print("⏭️  Skipping this product...")
+            return None
+        
+        # Try to parse user input
+        parsed_dims = parse_manual_dimensions(user_input)
+        if parsed_dims:
+            print(f"✅ Parsed dimensions: {parsed_dims['length']}×{parsed_dims['width']}×{parsed_dims['height']}cm")
+            confirm = input("Is this correct? (y/n): ").strip().lower()
+            if confirm in ['y', 'yes', '']:
+                return parsed_dims
+        else:
+            print("❌ Could not parse dimensions. Please try again.")
+            print("Expected format: numbers like '180×90×75' or '180 90 75' or '180x90x75'")
+
+def get_manual_price(url):
+    """Get manual input for price when auto-extraction fails"""
+    print(f"\n💰 MANUAL PRICE EXTRACTION")
+    print(f"Could not automatically find price for: {url}")
+    print("The browser should already be open. Please find the price and enter it below.")
+    
+    while True:
+        user_input = input("\nEnter price (e.g., '£299.99', '€250', '$199') or 'skip': ").strip()
+        
+        if user_input.lower() == 'skip':
+            return None
+        
+        # Try to parse the price
+        parsed_cur, parsed_val = parse_price(user_input)
+        if parsed_cur and parsed_val:
+            print(f"✅ Parsed price: {parsed_val} {parsed_cur}")
+            confirm = input("Is this correct? (y/n): ").strip().lower()
+            if confirm in ['y', 'yes', '']:
+                return {'currency': parsed_cur, 'amount': parsed_val}
+        else:
+            print("❌ Could not parse price. Please include currency symbol (£, €, $)")
+
+def parse_manual_dimensions(user_input):
+    """Parse manually entered dimensions"""
+    # Clean up input
+    user_input = user_input.replace('cm', '').replace('CM', '').strip()
+    
+    # Try various parsing patterns
+    patterns = [
+        r'(\d+)\s*[x×]\s*(\d+)\s*[x×]\s*(\d+)',
+        r'(\d+)\s+(\d+)\s+(\d+)',
+        r'[Ll][\s:]*(\d+).*[Ww][\s:]*(\d+).*[Hh][\s:]*(\d+)',
+        r'(\d+).*(\d+).*(\d+)',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, user_input)
+        if match:
+            try:
+                l, w, h = map(int, match.groups())
+                # Validate reasonable dimensions
+                if 50 <= l <= 500 and 50 <= w <= 200 and 50 <= h <= 120:
+                    return {
+                        'length': l,
+                        'width': w,
+                        'height': h,
+                        'notes': f"Manual entry: {user_input}"
+                    }
+            except ValueError:
+                continue
+    
+    return None
 
 # Extract delivery information
 def extract_delivery_info(soup):
@@ -294,7 +459,7 @@ def extract_contact_info(soup):
     return ''
 
 # Scrape single product page
-def scrape_table_data(url: str, base_currency="EUR", session=None) -> dict:
+def scrape_table_data(url: str, base_currency="EUR", session=None, manual_assistance=False) -> dict:
     if session is None:
         session = create_session()
     
@@ -309,14 +474,18 @@ def scrape_table_data(url: str, base_currency="EUR", session=None) -> dict:
         title_tag = soup.select_one("h1") or soup.select_one("title")
         title = title_tag.get_text().strip() if title_tag else "Unknown Product"
         
-        # Try to find price with multiple selectors
+        # Try to find price with multiple selectors - enhanced
         price_selectors = [
             ".price", ".product-price", ".price-current", "[data-price]", 
-            ".cost", ".amount", ".value", "[class*='price']", "[id*='price']"
+            ".cost", ".amount", ".value", "[class*='price']", "[id*='price']",
+            ".price-box", ".price-wrapper", ".product-price-value", ".current-price",
+            ".sale-price", ".regular-price", ".price-display", ".cost-display",
+            "[class*='cost']", "[class*='amount']", "[id*='cost']", "[id*='amount']"
         ]
         
         price_val = 0
         price_cur = "EUR"
+        price_found = False
         
         for selector in price_selectors:
             price_tag = soup.select_one(selector)
@@ -325,10 +494,18 @@ def scrape_table_data(url: str, base_currency="EUR", session=None) -> dict:
                 parsed_cur, parsed_val = parse_price(price_text)
                 if parsed_cur and parsed_val:
                     price_cur, price_val = parsed_cur, parsed_val
+                    price_found = True
                     break
         
-        # Extract dimensions
-        dimensions = extract_dimensions(soup, title)
+        # If no price found automatically, try manual assistance for important data
+        if not price_found and manual_assistance:
+            print(f"⚠️  Could not auto-extract price for {url}")
+            manual_price = get_manual_price(url)
+            if manual_price:
+                price_cur, price_val = manual_price['currency'], manual_price['amount']
+        
+        # Extract dimensions with manual assistance
+        dimensions = extract_dimensions_with_assistance(soup, title, url, manual_assistance)
         
         # Extract delivery information
         delivery_info = extract_delivery_info(soup)
@@ -421,17 +598,15 @@ def crawl_tables(request: CrawlRequest):
         
         # Process URLs with concurrent processing for better speed
         def process_url(url):
-            result = scrape_table_data(url, base_currency=request.base_currency, session=session)
+            result = scrape_table_data(url, base_currency=request.base_currency, session=session, manual_assistance=request.manual_assistance)
             return url, result
         
-        # Use ThreadPoolExecutor for concurrent processing
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-            future_to_url = {executor.submit(process_url, url): url for url in urls}
-            
-            for future in concurrent.futures.as_completed(future_to_url):
-                url = future_to_url[future]
+        # Process URLs - sequential if manual assistance, concurrent otherwise
+        if request.manual_assistance:
+            print("🤝 Manual assistance enabled - processing URLs sequentially...")
+            for url in urls:
                 try:
-                    url, data = future.result()
+                    url, data = process_url(url)
                     if data:
                         all_data.append(data)
                     else:
@@ -439,6 +614,22 @@ def crawl_tables(request: CrawlRequest):
                 except Exception as exc:
                     print(f'URL {url} generated an exception: {exc}')
                     failed_urls.append(url)
+        else:
+            # Use ThreadPoolExecutor for concurrent processing
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                future_to_url = {executor.submit(process_url, url): url for url in urls}
+                
+                for future in concurrent.futures.as_completed(future_to_url):
+                    url = future_to_url[future]
+                    try:
+                        url, data = future.result()
+                        if data:
+                            all_data.append(data)
+                        else:
+                            failed_urls.append(url)
+                    except Exception as exc:
+                        print(f'URL {url} generated an exception: {exc}')
+                        failed_urls.append(url)
         
         # Save failed URLs for review
         if failed_urls:
