@@ -12,6 +12,9 @@ import concurrent.futures
 import time
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import webbrowser
+import subprocess
+import json
 
 app = FastAPI(title="International Solid Oak Table Scraper")
 
