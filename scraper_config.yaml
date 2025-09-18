@@ -1,0 +1,230 @@
+# Sample configuration file for Enhanced Oak Table Scraper
+# Copy this to 'scraper_config.yaml' and customize as needed
+
+# Main scraping configuration
+scraping:
+  # Request timeouts and retries
+  timeout: 15                    # Request timeout in seconds
+  max_retries: 3                 # Maximum retry attempts
+  delay_between_requests: 1.0    # Delay between requests (seconds)
+  max_workers: 3                 # Concurrent processing threads
+  
+  # Extraction behavior
+  extraction_mode: "balanced"    # Options: aggressive, balanced, conservative
+  enable_manual_assistance: false # Enable interactive manual input
+  price_extraction_timeout: 30   # Timeout for manual price input
+  dimension_extraction_timeout: 30 # Timeout for manual dimension input
+  
+  # Data validation ranges
+  min_price: 10.0               # Minimum valid price
+  max_price: 50000.0            # Maximum valid price
+  min_length: 30.0              # Minimum table length (cm)
+  max_length: 500.0             # Maximum table length (cm)
+  min_width: 30.0               # Minimum table width (cm)
+  max_width: 200.0              # Maximum table width (cm)
+  min_height: 50.0              # Minimum table height (cm)
+  max_height: 120.0             # Maximum table height (cm)
+  
+  # Output preferences
+  default_output_formats: ["excel", "csv"] # Output formats to generate
+  excel_formatting: true        # Apply formatting to Excel output
+  include_timestamps: true      # Include timestamps in output
+  
+  # Company tracking
+  skip_processed_companies: true # Skip already processed companies
+  company_tracking_file: "processed_companies.json"
+  
+  # Logging configuration
+  log_level: "INFO"             # Log level: DEBUG, INFO, WARNING, ERROR
+  log_directory: "logs"         # Directory for log files
+  keep_logs_days: 30            # Days to keep log files
+
+# Price extraction configuration
+price_extraction:
+  # Supported currency symbols
+  currency_symbols: ["€", "£", "$", "¥", "₹"]
+  
+  # Supported currency codes
+  currency_codes: ["EUR", "GBP", "USD", "CAD", "AUD", "JPY", "INR"]
+  
+  # CSS selectors for price elements (in order of preference)
+  price_selectors:
+    - ".price"
+    - ".product-price"
+    - ".price-current"
+    - "[data-price]"
+    - ".cost"
+    - ".amount"
+    - ".value"
+    - ".price-box"
+    - ".price-wrapper"
+    - ".current-price"
+    - ".sale-price"
+    - ".regular-price"
+  
+  # Patterns to exclude (old prices, savings, etc.)
+  exclude_patterns:
+    - "was\\s*[€£$]"           # "was £299"
+    - "save\\s*[€£$]"          # "save £50"
+    - "rrp\\s*[€£$]"           # "RRP £299"
+
+# Dimension extraction configuration
+dimension_extraction:
+  # CSS selectors for dimension information
+  dimension_selectors:
+    - ".dimensions"
+    - ".specs"
+    - ".specifications"
+    - ".product-details"
+    - ".description"
+    - ".product-info"
+    - ".details"
+    - ".measurements"
+    - ".size"
+    - ".tech-specs"
+    - "[class*='dimension']"
+    - "[class*='spec']"
+    - "table"
+    - "#specifications"
+    - "#details"
+  
+  # Unit conversion factors to centimeters
+  unit_conversions:
+    inch: 2.54
+    ft: 30.48
+    mm: 0.1
+    m: 100.0
+
+# Material detection configuration
+material_detection:
+  # Material keywords and variations
+  material_keywords:
+    oak:
+      - "oak"
+      - "solid oak"
+      - "oak wood"
+      - "english oak"
+      - "american oak"
+    pine:
+      - "pine"
+      - "pine wood"
+      - "scots pine"
+    walnut:
+      - "walnut"
+      - "walnut wood"
+      - "american walnut"
+    mahogany:
+      - "mahogany"
+      - "mahogany wood"
+    beech:
+      - "beech"
+      - "beech wood"
+    mdf:
+      - "mdf"
+      - "medium density fibreboard"
+      - "medium density fiberboard"
+    reclaimed:
+      - "reclaimed wood"
+      - "reclaimed"
+      - "recycled wood"
+  
+  # Finish keywords
+  finish_keywords:
+    natural:
+      - "natural"
+      - "unfinished"
+      - "raw"
+      - "bare wood"
+    stained:
+      - "stained"
+      - "dark stain"
+      - "light stain"
+      - "wood stain"
+    painted:
+      - "painted"
+      - "white painted"
+      - "black painted"
+    waxed:
+      - "waxed"
+      - "bee wax"
+      - "furniture wax"
+      - "wax finish"
+    oiled:
+      - "oiled"
+      - "oil finish"
+      - "danish oil"
+      - "tung oil"
+  
+  # Color keywords
+  color_keywords:
+    - "white"
+    - "black"
+    - "brown"
+    - "honey"
+    - "natural"
+    - "dark"
+    - "light"
+    - "golden"
+    - "amber"
+    - "espresso"
+
+# Google search configuration
+google_search:
+  # Search parameters
+  max_results_per_query: 5      # Results per search query
+  max_queries: 15               # Maximum total queries to run
+  search_delay: 2.0             # Delay between searches (seconds)
+  headless_browser: true        # Run browser in headless mode
+  
+  # Chrome browser options
+  chrome_options:
+    - "--no-sandbox"
+    - "--disable-dev-shm-usage"
+    - "--disable-gpu"
+    - "--window-size=1920,1080"
+  
+  # Base search terms for query generation
+  base_search_terms:
+    - "solid oak dining table"
+    - "oak kitchen table"
+    - "wooden dining table UK"
+    - "oak furniture store"
+    - "handmade oak table"
+    - "rustic oak table"
+    - "farmhouse dining table"
+  
+  # Domains to exclude from results
+  exclude_domains:
+    - "google.com"
+    - "youtube.com"
+    - "facebook.com"
+    - "twitter.com"
+    - "instagram.com"
+    - "pinterest.com"
+    - "wikipedia.org"
+    - "amazon.com"
+    - "ebay.com"
+    - "gumtree.com"
+    - "etsy.com"
+    - "wayfair.com"
+    - "overstock.com"
+    - "argos.co.uk"
+    - "ikea.com"
+    - "next.co.uk"
+  
+  # Target domains (optional - leave empty to search all)
+  target_domains: []
+
+# Advanced configuration
+advanced:
+  # Request headers
+  user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+  
+  # Respect robots.txt files
+  respect_robots_txt: true
+  
+  # Enable/disable features
+  enable_google_search: true
+  enable_company_tracking: true
+  enable_data_validation: true
+  enable_session_reporting: true
