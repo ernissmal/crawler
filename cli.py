@@ -19,23 +19,24 @@ def create_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Search for oak furniture
+  # Search for John Doe contacts (using template)
+  python cli.py person "John Doe Lisburn" --template john_doe_contacts --max-results 10
+
+  # Search for oak tables with dimensions (using template)
+  python cli.py product "solid oak table" --template oak_table_dimensions --include "dimensions,cm"
+
+  # Search for Vilnius IT companies (using template)  
+  python cli.py company "IT Vilnius WordPress" --template vilnius_it_wordpress --cities "Vilnius"
+
+  # Custom field extraction
+  python cli.py company "restaurants Dublin" --fields "name,phone,address,rating" --field-mode custom
+
+  # Hybrid approach
+  python cli.py product "electronics" --template oak_table_dimensions --fields "warranty,brand" --field-mode hybrid
+
+  # Legacy examples (without field selection)
   python cli.py product "oak furniture Kaunas" --include "table,chair" --max-results 20
-
-  # Search for IT companies  
   python cli.py company "IT companies Lisburn" --regions "Northern Ireland" --exclude "jobs,careers"
-
-  # Search for people in public databases
-  python cli.py person "business executives Dubai" --regions "UAE" --extraction basic
-
-  # Search for social media accounts
-  python cli.py social_media "tech startups Ireland Twitter" --include "startup,tech"
-
-  # Search for business emails
-  python cli.py email "tech companies contact Ireland" --include "contact,info"
-
-  # Use custom configuration
-  python cli.py product "laptops under 1000" --config configs/electronics_config.yaml
         """)
     
     parser.add_argument(
@@ -122,6 +123,25 @@ Examples:
         help="Show what would be searched without actually scraping"
     )
     
+    # Field Selection Options
+    parser.add_argument(
+        "--template", "-t",
+        choices=["john_doe_contacts", "oak_table_dimensions", "vilnius_it_wordpress"],
+        help="Use pre-built extraction template"
+    )
+    
+    parser.add_argument(
+        "--fields",
+        help="Custom fields to extract (comma-separated: phone,email,price,dimensions,address)"
+    )
+    
+    parser.add_argument(
+        "--field-mode",
+        choices=["template", "custom", "hybrid"],
+        default="template",
+        help="Field selection mode (default: template)"
+    )
+    
     parser.add_argument(
         "--verbose", "-v",
         action="store_true",
@@ -153,11 +173,15 @@ def create_search_request(args) -> UniversalSearchRequest:
     include_keywords = parse_comma_separated(args.include)
     exclude_keywords = parse_comma_separated(args.exclude)
     output_formats = parse_comma_separated(args.output_formats)
+    custom_fields = parse_comma_separated(args.fields)
     
     # Create request
     request = UniversalSearchRequest(
         search_type=search_type,
         config_file=args.config,
+        extraction_template=args.template,
+        custom_fields=custom_fields,
+        field_selection_mode=args.field_mode,
         primary_query=args.query,
         secondary_queries=secondary_queries,
         regions=regions,
@@ -180,6 +204,14 @@ def print_search_preview(request: UniversalSearchRequest):
     print("=" * 40)
     print(f"Search Type: {request.search_type.value}")
     print(f"Primary Query: {request.primary_query}")
+    
+    # Field selection info
+    if request.extraction_template:
+        print(f"🎯 Template: {request.extraction_template}")
+    if request.custom_fields:
+        print(f"🔧 Custom Fields: {', '.join(request.custom_fields)}")
+    if request.field_selection_mode != "template":
+        print(f"⚙️ Field Mode: {request.field_selection_mode}")
     
     if request.secondary_queries:
         print(f"Secondary Queries: {', '.join(request.secondary_queries)}")
@@ -232,6 +264,11 @@ async def main():
     print(f"🚀 Starting {request.search_type.value} search...")
     print(f"🔍 Query: {request.primary_query}")
     
+    if request.extraction_template:
+        print(f"🎯 Using template: {request.extraction_template}")
+    elif request.custom_fields:
+        print(f"🔧 Custom fields: {', '.join(request.custom_fields)}")
+    
     try:
         results = await universal_scraper.search_and_scrape(request)
         
@@ -240,6 +277,7 @@ async def main():
         print("📊 SEARCH RESULTS SUMMARY")
         print("=" * 50)
         print(f"✅ Search Type: {results['search_type']}")
+        print(f"🎯 Template Used: {results.get('extraction_template', 'N/A')}")
         print(f"🔗 URLs Found: {results['total_urls_found']}")
         print(f"📦 Results Extracted: {results['total_results']}")
         
@@ -256,35 +294,53 @@ async def main():
             print(f"   - Errors: {summary.get('total_errors', 0)}")
             print(f"   - Success Rate: {summary.get('success_rate', 0):.1%}")
         
-        # Show sample results
+        # Show sample results with template-aware display
         if results['results'] and args.verbose:
             print(f"\n📝 Sample Results (first 3):")
             for i, result in enumerate(results['results'][:3], 1):
                 print(f"\n{i}. {result.get('url', 'No URL')}")
                 
-                # Show relevant fields based on search type
-                if request.search_type == SearchType.PRODUCT:
+                # Show template-specific fields if available
+                if request.extraction_template == "john_doe_contacts":
+                    print(f"   Phone: {result.get('phone_number', 'N/A')}")
+                    print(f"   Email: {result.get('email_address', 'N/A')}")
                     print(f"   Name: {result.get('name', 'N/A')}")
-                    if 'price_amount' in result:
-                        print(f"   Price: {result.get('price_currency', '')} {result.get('price_amount', 'N/A')}")
-                
-                elif request.search_type == SearchType.COMPANY:
-                    print(f"   Company: {result.get('name', 'N/A')}")
-                    print(f"   Industry: {result.get('industry', 'N/A')}")
                     print(f"   Location: {result.get('location', 'N/A')}")
                 
-                elif request.search_type == SearchType.PERSON:
-                    print(f"   Name: {result.get('name', 'N/A')}")
-                    print(f"   Profession: {result.get('profession', 'N/A')}")
-                    print(f"   Company: {result.get('company', 'N/A')}")
+                elif request.extraction_template == "oak_table_dimensions":
+                    print(f"   Company: {result.get('company_name', 'N/A')}")
+                    print(f"   Price: {result.get('price', 'N/A')}")
+                    print(f"   Dimensions: {result.get('dimensions', 'N/A')}")
+                    print(f"   Material: {result.get('material', 'N/A')}")
                 
-                elif request.search_type == SearchType.SOCIAL_MEDIA:
-                    print(f"   Username: {result.get('username', 'N/A')}")
-                    print(f"   Platform: {result.get('platform', 'N/A')}")
+                elif request.extraction_template == "vilnius_it_wordpress":
+                    print(f"   Company: {result.get('company_name', 'N/A')}")
+                    print(f"   Address: {result.get('address', 'N/A')}")
+                    print(f"   Phone: {result.get('phone_number', 'N/A')}")
+                    print(f"   Website: {result.get('website', 'N/A')}")
+                    print(f"   Price Range: {result.get('price_range', 'N/A')}")
                 
-                elif request.search_type == SearchType.EMAIL:
-                    print(f"   Email: {result.get('email', 'N/A')}")
-                    print(f"   Organization: {result.get('organization', 'N/A')}")
+                elif request.custom_fields:
+                    # Show custom fields
+                    for field in request.custom_fields:
+                        print(f"   {field.title()}: {result.get(field, 'N/A')}")
+                
+                else:
+                    # Show standard fields based on search type
+                    if request.search_type == SearchType.PRODUCT:
+                        print(f"   Name: {result.get('name', 'N/A')}")
+                        if 'price_amount' in result:
+                            print(f"   Price: {result.get('price_currency', '')} {result.get('price_amount', 'N/A')}")
+                    
+                    elif request.search_type == SearchType.COMPANY:
+                        print(f"   Company: {result.get('name', 'N/A')}")
+                        print(f"   Industry: {result.get('industry', 'N/A')}")
+                        print(f"   Location: {result.get('location', 'N/A')}")
+                    
+                    elif request.search_type == SearchType.PERSON:
+                        print(f"   Name: {result.get('name', 'N/A')}")
+                        print(f"   Profession: {result.get('profession', 'N/A')}")
+                        print(f"   Company: {result.get('company', 'N/A')}")
         
         print(f"\n🎉 Search completed successfully!")
         
