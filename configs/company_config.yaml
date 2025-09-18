@@ -1,0 +1,124 @@
+# Company Search Configuration
+# Use this template to configure company/business searches
+
+# Data extraction settings
+extraction:
+  required_fields:
+    - "name"
+    - "industry"
+    - "location"
+  
+  optional_fields:
+    - "website"
+    - "employees"
+    - "revenue"
+    - "founded"
+    - "headquarters"
+    - "description"
+    - "services"
+    - "leadership"
+    - "phone"
+    - "email"
+    - "social_media"
+    - "certifications"
+    - "awards"
+  
+  # CSS selectors for company data
+  selectors:
+    name:
+      - "h1"
+      - ".company-name"
+      - ".business-name"
+      - ".org-name"
+      - "[data-testid='company-name']"
+    
+    industry:
+      - ".industry"
+      - ".sector"
+      - ".category"
+      - ".business-type"
+      - "[data-testid='industry']"
+    
+    location:
+      - ".address"
+      - ".location"
+      - ".headquarters"
+      - ".office-location"
+      - "[data-testid='location']"
+    
+    employees:
+      - ".employees"
+      - ".staff-count"
+      - ".team-size"
+      - "[data-testid='employees']"
+    
+    website:
+      - ".website"
+      - ".url"
+      - "a[href*='www']"
+      - "[data-testid='website']"
+    
+    phone:
+      - ".phone"
+      - ".telephone"
+      - ".contact-number"
+      - "a[href^='tel:']"
+    
+    email:
+      - ".email"
+      - "a[href^='mailto:']"
+      - "[data-testid='email']"
+
+# Data validation rules
+validation:
+  name_min_length: 2
+  location_required: true
+  employee_count_max: 10000000
+
+# Search behavior
+search:
+  # Keywords that indicate a company page
+  company_indicators:
+    - "company"
+    - "business"
+    - "corporation"
+    - "ltd"
+    - "inc"
+    - "about us"
+    - "services"
+    - "contact us"
+  
+  # Keywords to exclude
+  exclude_indicators:
+    - "job posting"
+    - "career"
+    - "recruitment"
+    - "news article"
+    - "press release"
+
+# Region-specific settings
+regions:
+  # Common business directory domains by region
+  business_directories:
+    UK:
+      - "yell.com"
+      - "companieshouse.gov.uk"
+      - "192.com"
+    
+    Ireland:
+      - "goldenpages.ie"
+      - "cro.ie"
+      - "kompass.com"
+    
+    Lithuania:
+      - "rekvizitai.vz.lt"
+      - "firmos.lt"
+      - "aruodas.lt"
+
+# Examples of searches this config can handle:
+examples:
+  - "IT companies in Lisburn"
+  - "construction companies Dublin"
+  - "software development firms Vilnius"
+  - "marketing agencies London"
+  - "accounting firms Belfast"
