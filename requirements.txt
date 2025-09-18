@@ -4,3 +4,9 @@ pandas
 requests
 beautifulsoup4
 forex-python
+selenium
+webdriver-manager
+openpyxl
+xlsxwriter
+pyyaml
+uvicorn
