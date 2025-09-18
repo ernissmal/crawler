@@ -1,0 +1,156 @@
+# Person Search Configuration
+# Use this template to configure people/person searches
+
+# Data extraction settings
+extraction:
+  required_fields:
+    - "name"
+    - "profession"
+  
+  optional_fields:
+    - "company"
+    - "location"
+    - "education"
+    - "social_media"
+    - "email"
+    - "phone"
+    - "biography"
+    - "skills"
+    - "experience"
+    - "achievements"
+    - "publications"
+    - "certifications"
+    - "languages"
+    - "interests"
+  
+  # CSS selectors for person data
+  selectors:
+    name:
+      - "h1"
+      - ".person-name"
+      - ".profile-name"
+      - ".full-name"
+      - "[data-testid='person-name']"
+    
+    profession:
+      - ".title"
+      - ".profession"
+      - ".job-title"
+      - ".position"
+      - ".role"
+      - "[data-testid='profession']"
+    
+    company:
+      - ".company"
+      - ".employer"
+      - ".organization"
+      - ".workplace"
+      - "[data-testid='company']"
+    
+    location:
+      - ".location"
+      - ".address"
+      - ".city"
+      - ".region"
+      - "[data-testid='location']"
+    
+    education:
+      - ".education"
+      - ".university"
+      - ".school"
+      - ".degree"
+      - "[data-testid='education']"
+    
+    email:
+      - ".email"
+      - "a[href^='mailto:']"
+      - "[data-testid='email']"
+    
+    phone:
+      - ".phone"
+      - ".telephone"
+      - "a[href^='tel:']"
+      - "[data-testid='phone']"
+
+# Social media platform patterns
+social_media:
+  platforms:
+    linkedin:
+      pattern: "linkedin\\.com/in/([^/\\s]+)"
+      profile_url: "https://linkedin.com/in/{}"
+    
+    twitter:
+      pattern: "twitter\\.com/([^/\\s]+)"
+      profile_url: "https://twitter.com/{}"
+    
+    facebook:
+      pattern: "facebook\\.com/([^/\\s]+)"
+      profile_url: "https://facebook.com/{}"
+    
+    instagram:
+      pattern: "instagram\\.com/([^/\\s]+)"
+      profile_url: "https://instagram.com/{}"
+    
+    github:
+      pattern: "github\\.com/([^/\\s]+)"
+      profile_url: "https://github.com/{}"
+
+# Data validation rules
+validation:
+  name_min_length: 2
+  profession_required: true
+
+# Search behavior
+search:
+  # Keywords that indicate a person/profile page
+  person_indicators:
+    - "profile"
+    - "about"
+    - "biography"
+    - "cv"
+    - "resume"
+    - "portfolio"
+    - "contact"
+  
+  # Common profile platforms
+  profile_sites:
+    - "linkedin.com"
+    - "about.me"
+    - "researchgate.net"
+    - "academia.edu"
+    - "orcid.org"
+    - "github.com"
+    - "stackoverflow.com"
+  
+  # Keywords to exclude
+  exclude_indicators:
+    - "company page"
+    - "product"
+    - "service"
+    - "news article"
+    - "job posting"
+
+# Privacy and ethical guidelines
+privacy:
+  # Only search public databases and profiles
+  public_sources_only: true
+  
+  # Respect robots.txt
+  respect_robots_txt: true
+  
+  # Data retention policy
+  data_retention_days: 30
+  
+  # Fields that require explicit consent
+  sensitive_fields:
+    - "personal_phone"
+    - "home_address"
+    - "personal_email"
+
+# Examples of searches this config can handle:
+examples:
+  - "John Smith software engineer Dublin"
+  - "Dr. Sarah Johnson cardiologist Belfast"
+  - "Michael O'Connor architect Lisburn"
+  - "professor computer science Trinity College"
+  - "CEO tech startup Ireland"
