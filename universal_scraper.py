@@ -20,6 +20,8 @@ from google_geeking import GoogleGeeking
 from company_tracker import CompanyTracker
 from enhanced_logging import EnhancedLogger, ScrapingOperation, LogLevel
 from config_manager import ConfigManager
+from field_selector import SmartFieldExtractor, FieldSelector, FieldType, ExtractionTemplate
+from extraction_templates import TemplateLibrary
 
 app = FastAPI(title="Universal Multi-Purpose Scraper", version="2.0.0")
 
@@ -43,6 +45,11 @@ class UniversalSearchRequest(BaseModel):
     """Universal search request that can handle any search type"""
     search_type: SearchType
     config_file: Optional[str] = None  # Path to specific config file
+    
+    # Field Selection Options
+    extraction_template: Optional[str] = Field(default=None, description="Pre-built template name (john_doe_contacts, oak_table_dimensions, vilnius_it_wordpress)")
+    custom_fields: Optional[List[str]] = Field(default=[], description="Custom field names to extract")
+    field_selection_mode: Optional[str] = Field(default="template", description="template, custom, or hybrid")
     
     # Core search parameters
     primary_query: str = Field(..., description="Main search term or entity name")
@@ -140,11 +147,15 @@ class UniversalConfig:
 class UniversalExtractor:
     """Universal data extraction engine that adapts to different content types"""
     
-    def __init__(self, config: Dict[str, Any], search_type: SearchType):
+    def __init__(self, config: Dict[str, Any], search_type: SearchType, extraction_template: Optional[ExtractionTemplate] = None):
         self.config = config
         self.search_type = search_type
         self.extraction_config = config.get('extraction', {})
         self.logger = EnhancedLogger(f"universal_{search_type.value}")
+        
+        # Initialize field-based extraction
+        self.field_extractor = SmartFieldExtractor()
+        self.extraction_template = extraction_template
         
     def extract_data(self, soup, url: str, extraction_mode: ExtractionMode = ExtractionMode.DETAILED) -> Dict[str, Any]:
         """Extract data based on search type and configuration"""
@@ -156,6 +167,35 @@ class UniversalExtractor:
             "extraction_mode": extraction_mode.value
         }
         
+        # Use smart field extraction if template is provided
+        if self.extraction_template:
+            self.logger.log_operation(
+                ScrapingOperation.DATA_VALIDATION,
+                f"Using extraction template: {self.extraction_template.name}",
+                LogLevel.INFO, url
+            )
+            
+            # Extract using smart field selector
+            template_data = self.field_extractor.extract_using_template(soup, self.extraction_template)
+            extracted_data.update(template_data)
+            
+            # Add template metadata
+            extracted_data["template_used"] = self.extraction_template.name
+            extracted_data["fields_extracted"] = list(template_data.keys())
+            
+        else:
+            # Fall back to legacy extraction method
+            extracted_data.update(self._extract_legacy_data(soup, url, extraction_mode))
+        
+        # Validate extracted data
+        self._validate_data(extracted_data, url)
+        
+        return extracted_data
+    
+    def _extract_legacy_data(self, soup, url: str, extraction_mode: ExtractionMode) -> Dict[str, Any]:
+        """Legacy extraction method for backward compatibility"""
+        legacy_data = {}
+        
         # Get required and optional fields
         required_fields = self.extraction_config.get('required_fields', [])
         optional_fields = self.extraction_config.get('optional_fields', [])
@@ -164,27 +204,24 @@ class UniversalExtractor:
         # Extract required fields
         for field in required_fields:
             value = self._extract_field(soup, field, selectors.get(field, []), required=True)
-            extracted_data[field] = value
+            legacy_data[field] = value
             
         # Extract optional fields if in detailed mode
         if extraction_mode in [ExtractionMode.DETAILED, ExtractionMode.CUSTOM]:
             for field in optional_fields:
                 value = self._extract_field(soup, field, selectors.get(field, []), required=False)
                 if value:
-                    extracted_data[field] = value
+                    legacy_data[field] = value
         
         # Apply type-specific extraction
         if self.search_type == SearchType.PRODUCT:
-            extracted_data.update(self._extract_product_specific(soup))
+            legacy_data.update(self._extract_product_specific(soup))
         elif self.search_type == SearchType.COMPANY:
-            extracted_data.update(self._extract_company_specific(soup))
+            legacy_data.update(self._extract_company_specific(soup))
         elif self.search_type == SearchType.PERSON:
-            extracted_data.update(self._extract_person_specific(soup))
+            legacy_data.update(self._extract_person_specific(soup))
             
-        # Validate extracted data
-        self._validate_data(extracted_data, url)
-        
-        return extracted_data
+        return legacy_data
     
     def _extract_field(self, soup, field_name: str, selectors: List[str], required: bool = False) -> Optional[str]:
         """Extract a specific field using provided selectors"""
@@ -345,8 +382,22 @@ class UniversalScraper:
         # Load appropriate configuration
         config = self.config_manager.load_config(request.search_type, request.config_file)
         
-        # Initialize extractor
-        extractor = UniversalExtractor(config, request.search_type)
+        # Determine extraction template
+        extraction_template = None
+        if request.extraction_template:
+            extraction_template = TemplateLibrary.get_template_by_name(request.extraction_template)
+            if not extraction_template:
+                self.logger.log_operation(
+                    ScrapingOperation.DATA_VALIDATION,
+                    f"Template '{request.extraction_template}' not found, using default extraction",
+                    LogLevel.WARNING
+                )
+        elif request.field_selection_mode == "custom" and request.custom_fields:
+            # Create custom template from specified fields
+            extraction_template = self._create_custom_template(request)
+        
+        # Initialize extractor with template
+        extractor = UniversalExtractor(config, request.search_type, extraction_template)
         
         # Generate search queries
         queries = self._generate_queries(request)
@@ -366,6 +417,7 @@ class UniversalScraper:
         
         return {
             "search_type": request.search_type.value,
+            "extraction_template": request.extraction_template or "legacy",
             "total_urls_found": len(urls),
             "total_results": len(results),
             "results": results,
@@ -452,6 +504,54 @@ class UniversalScraper:
                 continue
         
         return results
+    
+    def _create_custom_template(self, request: UniversalSearchRequest) -> ExtractionTemplate:
+        """Create a custom extraction template from request parameters"""
+        fields = []
+        
+        # Map common field names to FieldTypes
+        field_type_mapping = {
+            'phone': FieldType.PHONE,
+            'email': FieldType.EMAIL,
+            'price': FieldType.PRICE,
+            'dimensions': FieldType.DIMENSIONS,
+            'address': FieldType.ADDRESS,
+            'url': FieldType.URL,
+            'rating': FieldType.RATING,
+            'number': FieldType.NUMBER,
+            'date': FieldType.DATE,
+            'percentage': FieldType.PERCENTAGE
+        }
+        
+        for field_name in request.custom_fields:
+            # Determine field type
+            field_type = FieldType.TEXT  # Default
+            for key, ftype in field_type_mapping.items():
+                if key in field_name.lower():
+                    field_type = ftype
+                    break
+            
+            # Create field selector
+            field_selector = FieldSelector(
+                name=field_name,
+                field_type=field_type,
+                css_selectors=[f".{field_name}", f"[data-{field_name}]", f".{field_name.replace('_', '-')}"],
+                required=True if field_name in ['name', 'title', 'company'] else False
+            )
+            fields.append(field_selector)
+        
+        # Create custom template
+        template = ExtractionTemplate(
+            name="custom_extraction",
+            description=f"Custom extraction for {request.search_type.value}",
+            search_type=request.search_type.value,
+            fields=fields,
+            priority_fields=request.custom_fields[:3],  # First 3 as priority
+            optional_fields=request.custom_fields[3:],
+            validation_rules={}
+        )
+        
+        return template
     
     def _export_results(self, results: List[Dict[str, Any]], 
                        request: UniversalSearchRequest) -> Dict[str, str]:
@@ -541,6 +641,109 @@ def create_config_template(search_type: SearchType, filename: Optional[str] = No
         "filename": config_path,
         "config": config
     }
+
+@app.get("/templates")
+def list_extraction_templates():
+    """List all available extraction templates"""
+    return {
+        "templates": TemplateLibrary.list_available_templates(),
+        "custom_template_support": True,
+        "supported_field_types": [ft.value for ft in FieldType]
+    }
+
+@app.get("/templates/{template_name}")
+def get_template_details(template_name: str):
+    """Get detailed information about a specific template"""
+    template = TemplateLibrary.get_template_by_name(template_name)
+    
+    if not template:
+        raise HTTPException(status_code=404, detail=f"Template '{template_name}' not found")
+    
+    return {
+        "template": {
+            "name": template.name,
+            "description": template.description,
+            "search_type": template.search_type,
+            "total_fields": len(template.fields),
+            "priority_fields": template.priority_fields,
+            "optional_fields": template.optional_fields,
+            "validation_rules": template.validation_rules,
+            "fields": [
+                {
+                    "name": field.name,
+                    "type": field.field_type.value,
+                    "required": field.required,
+                    "css_selectors": field.css_selectors,
+                    "context_keywords": getattr(field, 'context_keywords', [])
+                }
+                for field in template.fields
+            ]
+        }
+    }
+
+@app.post("/search/john-doe-contacts")
+async def search_john_doe_contacts(
+    query: str = "John Doe Lisburn contact",
+    max_results: int = 20
+):
+    """Specialized endpoint for John Doe contact searches"""
+    request = UniversalSearchRequest(
+        search_type=SearchType.PERSON,
+        primary_query=query,
+        extraction_template="john_doe_contacts",
+        max_results=max_results,
+        include_keywords=["lisburn", "contact", "phone", "email"],
+        cities=["Lisburn"]
+    )
+    
+    try:
+        results = await universal_scraper.search_and_scrape(request)
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+@app.post("/search/oak-table-dimensions")
+async def search_oak_tables(
+    query: str = "solid oak table surface dimensions",
+    max_results: int = 30
+):
+    """Specialized endpoint for oak table searches with dimensions"""
+    request = UniversalSearchRequest(
+        search_type=SearchType.PRODUCT,
+        primary_query=query,
+        extraction_template="oak_table_dimensions",
+        max_results=max_results,
+        include_keywords=["solid oak", "table", "dimensions", "cm"],
+        exclude_keywords=["chair", "stool", "leg"]
+    )
+    
+    try:
+        results = await universal_scraper.search_and_scrape(request)
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+@app.post("/search/vilnius-it-companies")
+async def search_vilnius_it_companies(
+    query: str = "IT companies Vilnius WordPress development",
+    max_results: int = 25
+):
+    """Specialized endpoint for Vilnius IT companies"""
+    request = UniversalSearchRequest(
+        search_type=SearchType.COMPANY,
+        primary_query=query,
+        extraction_template="vilnius_it_wordpress",
+        max_results=max_results,
+        include_keywords=["vilnius", "lithuania", "wordpress", "web development"],
+        cities=["Vilnius"],
+        countries=["LT", "Lithuania"]
+    )
+    
+    try:
+        results = await universal_scraper.search_and_scrape(request)
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
