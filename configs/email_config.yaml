@@ -1,0 +1,196 @@
+# Email Search Configuration
+# Use this template to configure email address searches
+
+# Data extraction settings
+extraction:
+  required_fields:
+    - "email"
+    - "domain"
+  
+  optional_fields:
+    - "name"
+    - "organization"
+    - "department"
+    - "title"
+    - "phone"
+    - "source_url"
+    - "verification_status"
+    - "email_type"
+    - "format_pattern"
+  
+  # Email extraction patterns
+  email_patterns:
+    # Standard email formats
+    - "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+    
+    # Common obfuscation patterns
+    - "[a-zA-Z0-9._%+-]+\\s*\\[at\\]\\s*[a-zA-Z0-9.-]+\\s*\\[dot\\]\\s*[a-zA-Z]{2,}"
+    - "[a-zA-Z0-9._%+-]+\\s*@\\s*[a-zA-Z0-9.-]+\\s*\\.\\s*[a-zA-Z]{2,}"
+    - "[a-zA-Z0-9._%+-]+\\s*\\(at\\)\\s*[a-zA-Z0-9.-]+\\s*\\(dot\\)\\s*[a-zA-Z]{2,}"
+  
+  # CSS selectors for email-related data
+  selectors:
+    email:
+      - "a[href^='mailto:']"
+      - ".email"
+      - ".contact-email"
+      - "[data-testid='email']"
+    
+    name:
+      - ".contact-name"
+      - ".person-name"
+      - ".staff-name"
+      - "h3"
+      - "h4"
+    
+    title:
+      - ".title"
+      - ".position"
+      - ".role"
+      - ".job-title"
+    
+    department:
+      - ".department"
+      - ".division"
+      - ".team"
+    
+    organization:
+      - ".company"
+      - ".organization"
+      - ".employer"
+    
+    phone:
+      - "a[href^='tel:']"
+      - ".phone"
+      - ".telephone"
+
+# Domain analysis
+domains:
+  # Common business email domains to prioritize
+  business_domains:
+    - "company.com"
+    - "business.ie"
+    - "ltd.uk"
+    - "corp.com"
+    - "group.com"
+  
+  # Personal email domains to potentially filter
+  personal_domains:
+    - "gmail.com"
+    - "yahoo.com"
+    - "hotmail.com"
+    - "outlook.com"
+    - "icloud.com"
+  
+  # Free email services
+  free_services:
+    - "gmail.com"
+    - "yahoo.com"
+    - "hotmail.com"
+    - "outlook.com"
+    - "aol.com"
+    - "protonmail.com"
+
+# Email verification (basic patterns)
+verification:
+  # Email format validation
+  format_validation: true
+  
+  # Domain existence check
+  domain_check: false  # Set to true for real verification
+  
+  # Common email patterns by organization type
+  common_patterns:
+    corporate:
+      - "firstname.lastname@domain.com"
+      - "first.last@domain.com"
+      - "f.lastname@domain.com"
+      - "firstnamelastname@domain.com"
+    
+    academic:
+      - "firstname.lastname@university.edu"
+      - "initial.lastname@university.edu"
+      - "student.id@university.edu"
+
+# Search behavior
+search:
+  # Page types likely to contain emails
+  target_pages:
+    - "contact"
+    - "about"
+    - "team"
+    - "staff"
+    - "directory"
+    - "leadership"
+    - "faculty"
+  
+  # Context keywords that indicate email presence
+  email_indicators:
+    - "contact us"
+    - "get in touch"
+    - "email us"
+    - "reach out"
+    - "correspondence"
+    - "inquiries"
+  
+  # Content to avoid
+  exclude_indicators:
+    - "no-reply"
+    - "noreply"
+    - "donotreply"
+    - "mailer-daemon"
+    - "postmaster"
+
+# Data validation
+validation:
+  # Email format validation regex
+  email_regex: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+  
+  # Minimum email length
+  min_length: 5
+  
+  # Maximum email length
+  max_length: 254
+  
+  # Required components
+  must_have_at: true
+  must_have_dot: true
+
+# Privacy and compliance
+privacy:
+  # GDPR compliance
+  gdpr_compliant: true
+  
+  # Only collect publicly available emails
+  public_only: true
+  
+  # Respect robots.txt
+  respect_robots_txt: true
+  
+  # Data retention policy
+  data_retention_days: 30
+  
+  # Purpose limitation
+  business_use_only: true
+
+# Output formatting
+output:
+  # Include verification status
+  include_verification: true
+  
+  # Include source URL
+  include_source: true
+  
+  # Group by domain
+  group_by_domain: false
+  
+  # Sort by domain
+  sort_by_domain: true
+
+# Examples of searches this config can handle:
+examples:
+  - "IT company contacts Lisburn"
+  - "university faculty emails Belfast"
+  - "startup team contacts Dublin"
+  - "government department emails"
+  - "non-profit organization contacts"
