@@ -1,0 +1,165 @@
+# Social Media Search Configuration
+# Use this template to configure social media account searches
+
+# Data extraction settings
+extraction:
+  required_fields:
+    - "platform"
+    - "username"
+    - "profile_url"
+  
+  optional_fields:
+    - "display_name"
+    - "follower_count"
+    - "following_count"
+    - "bio"
+    - "location"
+    - "website"
+    - "verification_status"
+    - "account_type"
+    - "post_count"
+    - "join_date"
+    - "profile_image"
+    - "recent_activity"
+  
+  # Platform-specific selectors
+  selectors:
+    twitter:
+      username: 
+        - "[data-testid='UserName']"
+        - ".username"
+        - "@[a-zA-Z0-9_]+"
+      
+      display_name:
+        - "[data-testid='UserDisplayName']"
+        - ".display-name"
+      
+      bio:
+        - "[data-testid='UserDescription']"
+        - ".bio"
+      
+      follower_count:
+        - "[data-testid='UserFollowerCount']"
+        - ".followers-count"
+    
+    linkedin:
+      username:
+        - ".pv-entity__summary-info h1"
+        - ".profile-name"
+      
+      profession:
+        - ".pv-entity__summary-info h2"
+        - ".headline"
+      
+      location:
+        - ".pv-entity__summary-info .pv-entity__secondary-title"
+        - ".location"
+    
+    instagram:
+      username:
+        - "h2"
+        - ".username"
+      
+      bio:
+        - ".-vDIg span"
+        - ".bio"
+      
+      post_count:
+        - ".g47SY"
+        - ".post-count"
+    
+    facebook:
+      username:
+        - ".profileName"
+        - ".name"
+      
+      bio:
+        - ".profileIntro"
+        - ".about"
+
+# Platform configurations
+platforms:
+  twitter:
+    search_url: "https://twitter.com/search?q={query}"
+    profile_url_pattern: "https://twitter.com/{username}"
+    rate_limit_delay: 2
+    
+  linkedin:
+    search_url: "https://www.linkedin.com/search/results/people/?keywords={query}"
+    profile_url_pattern: "https://www.linkedin.com/in/{username}"
+    rate_limit_delay: 3
+    
+  instagram:
+    search_url: "https://www.instagram.com/explore/tags/{query}"
+    profile_url_pattern: "https://www.instagram.com/{username}"
+    rate_limit_delay: 2
+    
+  facebook:
+    search_url: "https://www.facebook.com/search/people/?q={query}"
+    profile_url_pattern: "https://www.facebook.com/{username}"
+    rate_limit_delay: 3
+    
+  tiktok:
+    search_url: "https://www.tiktok.com/search/user?q={query}"
+    profile_url_pattern: "https://www.tiktok.com/@{username}"
+    rate_limit_delay: 2
+
+# Search behavior
+search:
+  # Common username patterns
+  username_patterns:
+    - "@[a-zA-Z0-9_]+"
+    - "username: [a-zA-Z0-9_]+"
+    - "handle: [a-zA-Z0-9_]+"
+  
+  # Keywords that indicate social media profiles
+  social_indicators:
+    - "follow"
+    - "followers"
+    - "following"
+    - "posts"
+    - "profile"
+    - "tweets"
+    - "connections"
+  
+  # Content to exclude
+  exclude_indicators:
+    - "advertisement"
+    - "sponsored"
+    - "promoted"
+    - "fake account"
+    - "suspended"
+
+# Data validation
+validation:
+  username_min_length: 1
+  username_max_length: 50
+  
+  # Valid username characters by platform
+  username_patterns:
+    twitter: "^[a-zA-Z0-9_]{1,15}$"
+    instagram: "^[a-zA-Z0-9_.]{1,30}$"
+    linkedin: "^[a-zA-Z0-9-]{1,100}$"
+    facebook: "^[a-zA-Z0-9.]{1,50}$"
+
+# Privacy and ethics
+privacy:
+  # Only collect public information
+  public_only: true
+  
+  # Respect platform terms of service
+  respect_tos: true
+  
+  # Rate limiting to avoid being blocked
+  rate_limiting: true
+  
+  # Don't collect private/sensitive information
+  exclude_private_info: true
+
+# Examples of searches this config can handle:
+examples:
+  - "tech startup founder Twitter"
+  - "graphic designer Instagram Dublin"
+  - "marketing professional LinkedIn Belfast"
+  - "chef TikTok Ireland"
+  - "photographer social media Kaunas"
