@@ -1,0 +1,97 @@
+# Product Search Configuration
+# Use this template to configure product searches
+
+# Data extraction settings
+extraction:
+  required_fields:
+    - "name"
+    - "price"
+    - "description"
+  
+  optional_fields:
+    - "brand"
+    - "model"
+    - "features"
+    - "reviews"
+    - "rating"
+    - "availability"
+    - "specifications"
+    - "images"
+    - "shipping_info"
+  
+  # CSS selectors for different product data
+  selectors:
+    name: 
+      - "h1"
+      - ".product-title"
+      - ".product-name"
+      - "[data-testid='product-title']"
+    
+    price:
+      - ".price"
+      - ".product-price"
+      - ".cost"
+      - "[data-testid='price']"
+      - ".price-current"
+    
+    description:
+      - ".description"
+      - ".product-description"
+      - ".product-details"
+      - "[data-testid='description']"
+    
+    brand:
+      - ".brand"
+      - ".manufacturer"
+      - "[data-testid='brand']"
+    
+    rating:
+      - ".rating"
+      - ".stars"
+      - ".review-score"
+      - "[data-testid='rating']"
+    
+    reviews:
+      - ".reviews"
+      - ".review-count"
+      - "[data-testid='reviews']"
+  
+  # Regular expressions for price extraction
+  price_patterns:
+    - "([€£$¥₹])\\s?([\\d,]+\\.?\\d*)"
+    - "([\\d,]+\\.?\\d*)\\s+(EUR|GBP|USD|AUD|CAD)"
+    - "Price[:\\s]+([€£$¥₹])\\s?([\\d,]+\\.?\\d*)"
+
+# Data validation rules
+validation:
+  price_min: 0.01
+  price_max: 999999.99
+  name_min_length: 2
+  description_min_length: 10
+
+# Search behavior
+search:
+  # Keywords that indicate a product page
+  product_indicators:
+    - "add to cart"
+    - "buy now"
+    - "purchase"
+    - "product"
+    - "item"
+    - "price"
+  
+  # Keywords that indicate NOT a product page
+  exclude_indicators:
+    - "blog"
+    - "news"
+    - "about us"
+    - "contact"
+    - "privacy policy"
+
+# Examples of searches this config can handle:
+examples:
+  - "oak furniture in Kaunas"
+  - "laptop computers under €1000"
+  - "organic skincare products"
+  - "vintage watches for sale"
+  - "gaming chairs with lumbar support"
